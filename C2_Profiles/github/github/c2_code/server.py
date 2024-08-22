@@ -59,7 +59,6 @@ async def main():
     # Connect to Mythic gRPC server
     asyncio.create_task(mythic_client.handleGrpcStreamingServices())
 
-
     # Start Quart server to receive GitHub webhook messages 
     logger.info(f"Starting web server at 0.0.0.0:{config['port']}")
     await app.run_task(host='0.0.0.0', port=config['port'])
