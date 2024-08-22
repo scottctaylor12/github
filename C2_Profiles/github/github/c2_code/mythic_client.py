@@ -10,25 +10,30 @@ from mythic_container.logging import logger
 
 grpcStream = None
 
+
 # connect to Mythic gRPC endpoint
 async def handleGrpcStreamingServices():
-    maxInt = 2 ** 31 - 1
+    maxInt = 2**31 - 1
     while True:
         try:
             logger.info(f"Attempting connection to gRPC for pushC2OneToMany...")
             channel = grpc.aio.insecure_channel(
-                f'127.0.0.1:17444',
+                f"127.0.0.1:17444",
                 options=[
-                    ('grpc.max_send_message_length', maxInt),
-                    ('grpc.max_receive_message_length', maxInt),
-                ])
+                    ("grpc.max_send_message_length", maxInt),
+                    ("grpc.max_receive_message_length", maxInt),
+                ],
+            )
             await channel.channel_ready()
             client = PushC2Stub(channel=channel)
             streamConnections = handleStreamConnection(client)
             logger.info(f"[+] Successfully connected to gRPC for pushC2OneToMany")
             await asyncio.gather(streamConnections)
         except Exception as e:
-            logger.exception(f"Translation gRPC services closed for pushC2OneToMany: {e}")
+            logger.exception(
+                f"Translation gRPC services closed for pushC2OneToMany: {e}"
+            )
+
 
 # Receive messages from Mythic and post to GitHub
 async def handleStreamConnection(client):
@@ -36,22 +41,24 @@ async def handleStreamConnection(client):
     try:
         while True:
             grpcStream = client.StartPushC2StreamingOneToMany()
-            await grpcStream.write(grpcFuncs.PushC2MessageFromAgent(
-                C2ProfileName="github"
-            ))
+            await grpcStream.write(
+                grpcFuncs.PushC2MessageFromAgent(C2ProfileName="github")
+            )
             logger.info(f"Connected to gRPC for pushC2 StreamingOneToMany")
             async for request in grpcStream:
                 # this is streaming responses from Mythic to go to agents
                 try:
                     logger.info("posting message to github")
-                    #await UUIDToWebsocketConn[request.TrackingID].send(json.dumps({"data": request.Message.decode()}))
                     await github_client.post_comment(request.Message.decode())
                 except Exception as d:
-                    logger.exception(f"Failed to process handleStreamConnection message:\n{d}")
+                    logger.exception(
+                        f"Failed to process handleStreamConnection message:\n{d}"
+                    )
 
             logger.error(f"disconnected from gRPC for handleStreamConnection")
     except Exception as e:
         logger.exception(f"[-] exception in handleStreamConnection: {e}")
+
 
 # Receive base64 message from agent and send to Mythic
 async def send_to_mythic(msg):
@@ -62,7 +69,9 @@ async def send_to_mythic(msg):
             await asyncio.sleep(1)
             continue
         break
-    await grpcStream.write(grpcFuncs.PushC2MessageFromAgent(
-        C2ProfileName="github",
-        Base64Message=msg.encode("ascii"),
-    ))
+    await grpcStream.write(
+        grpcFuncs.PushC2MessageFromAgent(
+            C2ProfileName="github",
+            Base64Message=msg.encode("ascii"),
+        )
+    )
