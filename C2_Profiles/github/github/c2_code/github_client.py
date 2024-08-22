@@ -18,7 +18,6 @@ async def delete_comment(comment_id):
                 logger.info(f"Response: {await response.text()}")
 
 async def post_comment(msg):
-    print("CONFIG: " + str(config))
     url = f"https://api.github.com/repos/{config['owner']}/{config['repo']}/issues/{config['server_issue']}/comments"
     payload = {
         'body': msg

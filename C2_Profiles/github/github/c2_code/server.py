@@ -1,11 +1,12 @@
 #!/usr/local/bin/python
 import aiohttp
 import asyncio
-import git
+import github_client as github_client
 import hashlib
 import hmac
 import json
 import logging
+import mythic_client as mythic_client
 import os
 import sys
 from config import config
@@ -15,7 +16,6 @@ from quart import Quart, request, jsonify
 
 app = Quart(__name__)
 
-# turn off standard Quart logging
 log = logging.getLogger('quart.app')
 log.setLevel(logging.INFO)
 
@@ -25,6 +25,7 @@ def verify_signature(payload, signature, secret):
 
 @app.route('/', methods=['POST'])
 async def github_webhook():
+    # Verify request came from intended GitHub Webhook
     signature = request.headers.get('X-Hub-Signature-256')
     if signature is None:
         logger.info("Basic web request with no signature")
@@ -32,20 +33,17 @@ async def github_webhook():
     if not verify_signature(await request.data, signature, config['webhook_secret']):
         return jsonify({'error': 'Invalid signature'}), 400
 
+    # Process GitHub Webhook message
     event = request.headers.get('X-GitHub-Event')
     payload = await request.json
-
     if event == 'issue_comment':
         action = payload['action']
         issue = payload['issue']
         comment = payload['comment']
 
         if action == 'created' and issue['number'] == config['client_issue']:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(config['mythic_address'], headers={"Mythic": "github"}, data=comment['body']) as resp:
-                    response_text = await resp.text()
-                    await git.post_comment(response_text)
-                    await git.delete_comment(comment['id'])
+            await mythic_client.send_to_mythic(comment['body'])
+            await github_client.delete_comment(comment['id'])
 
     return jsonify({'status': 'success'}), 200
 
@@ -57,6 +55,10 @@ async def main():
         config.update(json.loads(config_file.read().decode('utf-8')))
     config['mythic_address'] = os.environ['MYTHIC_ADDRESS']
     sys.stdout.flush()
+
+    # Connect to Mythic gRPC server
+    asyncio.create_task(mythic_client.handleGrpcStreamingServices())
+
 
     # Start Quart server to receive GitHub webhook messages 
     logger.info(f"Starting web server at 0.0.0.0:{config['port']}")
