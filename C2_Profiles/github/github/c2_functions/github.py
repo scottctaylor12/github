@@ -29,12 +29,6 @@ class Github(C2Profile):
             required=True,
         ),
         C2ProfileParameter(
-            name="webhook_secret",
-            description="GitHub webhook secret used to validate incoming HTTP requests",
-            default_value="",
-            required=True,
-        ),
-        C2ProfileParameter(
             name="server_issue_number",
             description="GitHub issue # that Mythic will post jobs to",
             default_value="1",
