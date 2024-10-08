@@ -47,6 +47,14 @@ async def github_webhook():
             await mythic_client.send_to_mythic(comment["body"])
             await github_client.delete_comment(comment["id"])
 
+    elif event == "push":
+        commit = payload["head_commit"]
+        if commit and "server.txt" in commit["added"]:
+            uuid  = commit["message"]
+            myth_msg = await github_client.read_file(uuid)
+            myth_resp = await mythic_client.send_to_mythic(myth_msg)
+            await github_client.push(uuid, myth_resp)
+
     return jsonify({"status": "success"}), 200
 
 
@@ -58,10 +66,7 @@ async def main():
         config.update(json.loads(config_file.read().decode("utf-8")))
     config["mythic_address"] = os.environ["MYTHIC_ADDRESS"]
     sys.stdout.flush()
-
-    # Connect to Mythic gRPC server
-    asyncio.create_task(mythic_client.handleGrpcStreamingServices())
-
+    
     # Start Quart server to receive GitHub webhook messages
     logger.info(f"Starting web server at 0.0.0.0:{config['port']}")
     await app.run_task(host="0.0.0.0", port=config["port"])
