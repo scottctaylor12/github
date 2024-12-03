@@ -13,7 +13,7 @@ async def send_to_mythic(message):
             data=message,
         ) as response:
             if response.status == 200:
-                return await response.text
+                return await response.text()
             else:
                 logger.info(f"Failed to send message to Mythic. Status code: {response.status}")
                 logger.info(f"Response: {await response.text()}")
