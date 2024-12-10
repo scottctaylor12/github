@@ -1,5 +1,4 @@
 #!/usr/local/bin/python
-import aiohttp
 import asyncio
 import github_client as github_client
 import hashlib
@@ -48,9 +47,6 @@ async def github_webhook():
             log.info(comment["body"])
             resp = await mythic_client.send_to_mythic(comment["body"])
             await github_client.delete_comment(comment["id"])
-            #mythic_container.MythicGoRPC.send_mythic_rpc_operationeventlog_create.MythicRPCOperationEventLogCreateMessage(
-            #    OperationId=0,Message="test"
-            #)
             await github_client.post_comment(resp)
 
     elif event == "push":

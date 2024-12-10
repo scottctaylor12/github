@@ -1,5 +1,4 @@
 import aiohttp
-import json
 from config import config
 
 from mythic_container.logging import logger
