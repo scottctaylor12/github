@@ -25,7 +25,7 @@ class Github(C2Profile):
         C2ProfileParameter(
             name="personal_access_token",
             description="GitHub Personal Access Token used to programatically access GitHub",
-            default_value="",
+            default_value="github_pat_XXXXXX",
             required=True,
         ),
         C2ProfileParameter(
