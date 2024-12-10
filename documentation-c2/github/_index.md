@@ -12,13 +12,13 @@ weight = 5
 5. [Development](#development)
 
 ## Overview
-The GitHub C2 profile handles traffic via posting comments on GitHub issues. 
+The GitHub C2 profile handles command and control communication by posting comments on GitHub issues and pushing files to repos. 
 Setup and configuration is slightly tedious as the following are required:
 * GitHub repo
 * GitHub Issue #1 for messages from Mythic
 * GitHub Issue #2 for messages from Agents
-* GitHub Personal Access Token for posting GitHub comments via the API
-* GitHub repo Webhook for notifying Mythic of new comments
+* GitHub repo Webhook for notifying Mythic of new GitHub events
+* GitHub Personal Access Token to programmatically interact with GitHub
 
 ### GitHub C2 Workflow
 ```mermaid
@@ -26,17 +26,20 @@ sequenceDiagram
     participant M as Mythic
     participant G as GitHub
     participant A as Agent
-    A ->>+ G: Post Checkin message via GitHub issue
+    A ->>+ G: Post Checkin message via GitHub issue comment
     G ->>+ M: Webhook notification w message to Mythic
     M ->>+ G: Delete GitHub Issue comment
-    M ->>+ G: Post Checkin Response
-    A ->>+ G: Read GitHub issue comments (sleep timer)
-    M ->>+ G: Post message for agent
-    A ->>+ G: Read GitHub issue comments (sleep timer)
-    A ->>+ G: Delete GitHub issue comments for agent
-    A ->>+ G: Post response via GitHub issue comment
-    G ->>+ M: Webhook notification w message to Mythic
-    M ->>+ G: Delete GitHub issue comment
+    M ->>+ G: Post Checkin Response via GitHub issue comment
+    A ->>+ G: Get Checkin Response in GitHub issue comments
+    Note over M,A: Agent initial checkin process complete
+    A ->>+ G: Create new branch for agent
+    A ->>+ G: Push get_tasking message to repo
+    G ->>+ M: Webhook notification about new push
+    M ->>+ G: Read get_tasking message from file in repo
+    G ->>+ M: Push Mythic response to file in repo
+    A ->>+ G: Read Mythic response from file in repo
+    A ->>+ G: Delete branch
+    A ->>+ A: Sleep
 ```
 
 ## Setup
@@ -54,10 +57,12 @@ This is required for configuration later on.
 
 ### 3. GitHub Webhook
 How does Mythic know that a new comment is ready? A GitHub HTTP Webhook! 
-With that said, the Mythic C2 Profile must be internet accessible somehow for GitHub to send the webhook notification.
+With that said, the Mythic C2 Profile **must be internet accessible** somehow for GitHub to send the webhook notification directly to Mythic.
 
 To create the webhook, go to your GitHub repo's webhook settings at `https://github.com/$USER/$REPO/settings/hooks` and select *Add webhook*. 
 When adding the webhook, there are required settings that **must** be properly filled out:
+
+![image](./webhook-config.png)
 
 #### Payload URL
 As of now, the Mythic GitHub C2 Profile only supports **HTTP** traffic via the webhook. 
@@ -67,21 +72,19 @@ However, make sure that is accounted for in the payload URL!
 You can also use a redirector if you want to be fancy. An example URL might look like: `http://<mythic-server-ip>:1234`
 
 #### Content Type
-*application/json*
+* *application/json*
 
 #### Secret
-Enter any string. 
-However, it's important to remember this as it will be needed when configuring the Mythic GitHub C2 Profile later.
+* Enter any string. Remember it for later when configuring the Mythic GitHub C2 Profile later.
 
 #### SSL verification
-*Disable (not recommended)*
+* *Disable (not recommended)*
 
 #### Which events would you like to trigger this webhook?
-*Let me select individual events.*  
-[x] *Issue comments*
+* [x] *Send me **everything***
 
 #### Active
-Check the box.
+* Check the box.
 
 ### 4. GitHub Personal Access Token
 In order for Mythic and Agents to post comments onto GitHub programmatically, a Personal Access Token (PAT) is required. 
@@ -90,20 +93,25 @@ From there, select the *Generate new token* dropdown and choose *Generate new to
 (The exact details may change if GitHub brings fine-grained tokens out of beta). 
 The important details when generating the token are:
 
+![token-configuration](token-config.png)
+
 #### Expiration
-Consider the red team operation duration and select an appropriate amount of time for the key to be active. 
-A custom date can be set if 90 days is too short.
+* Consider the red team operation duration 
+* Select an appropriate amount of time for the key to be active
+* A custom date can be set if 90 days is too short.
 
 #### Resource owner
-Ensure the resource owner is the same owner of the GitHub repo that was created in step 1. 
+* Select your username 
+* Ensure the resource owner is the same owner of the GitHub repo that was created in step 1
 
 #### Repository access
-*Only select repositories*  
-Select the repository created in step 1.
+* *Only select repositories*  
+* Select the repository created in step 1.
 
 #### Repository Permissions
-*Issues -> Access: Read and write*  
-Selecting this permission will automatically add *Metadata -> Access: Read*
+* *Contents -> Access: Read and Write*
+* *Issues -> Access: Read and write* 
+* *Metadata -> Access: Read* (should automatically get added)
 
 **Copy the key after it is generated!** They key should start with *github_pat_*
 
@@ -111,9 +119,23 @@ Selecting this permission will automatically add *Metadata -> Access: Read*
 With the GitHub pieces in place, the Mythic GitHub C2 Profile is ready to be configured. 
 If the C2 Profile has not been installed on the Mythic server yet, do so by logging into your Mythic server's command line and running `mythic-cli install github https://github.com/scottctaylor12/github`.  
 
-Once installed, log into the Mythic server web interface and select the headphone icon to browse to *C2 Profiles and Payload Types*.
-To the right of the github c2 profile line, select the dropdown next to *Start Profile* and choose *View/Edit Config*. 
-From there, fill in all the details to match the settings from the previous setup steps. 
+Once installed:
+* Log into the Mythic server web interface and select the headphone icon to browse to *C2 Profiles and Payload Types*
+* To the right of the github c2 profile line, select the dropdown next to *Start Profile* and choose *View/Edit Config*
+* From there, fill in all the details to match the settings from the previous setup steps.
+
+Example Configuration
+```
+{
+    "owner": "scottctaylor12",
+    "repo": "prod",
+    "server_issue": 1,
+    "client_issue": 2,
+    "github_token": "github_pat_xxxxxxxxx",
+    "webhook_secret": "somethingsecret",
+    "port": "1234"
+}
+```
 
 After entering the configuration settings, Submit them and Start the C2 profile!
 
@@ -174,7 +196,7 @@ The User Agent to be passed in the HTTP requests for calls to the REST API
 A few considerations:
 * The web server included in this C2 Profile will be exposed to the internet to receive webhook notifications from GitHub. Take precautions like any HTTP C2 profile to avoid unwanted attention.
 * Making the GitHub repo private is suggested to prevent others from peeking at the GitHub issues.
-* 
+* To only allow connections from GitHub, the IP Address ranges are found under `"hooks"` at https://api.github.com/meta
 
 ## Development
 All of the code for the server is written in Python and located in `C2_Profiles/github/github/c2_code`.
